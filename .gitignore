@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Maven
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# Build
+**/build/
+**/dist/
