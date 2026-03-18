@@ -6,27 +6,27 @@ An event-driven microservices architecture for handling event checkout processes
 
 This project implements a microservices-based event-driven architecture for managing event checkouts. The system consists of four independent microservices that communicate asynchronously via Kafka events.
 
-### Microservices
+### Microservices (Saga-based)
 
 1. **Order Service** (`order-service`)
-   - Handles order creation and management
-   - Manages order lifecycle (PENDING, PROCESSING, COMPLETED, etc.)
+   - Creates orders and stores in-memory state
+   - Publishes `order.created` and tracks Saga status (PENDING → RESERVED → CONFIRMED / FAILED)
    - Endpoint: `/orders`
 
-2. **Payment Service** (`payment-service`)
-   - Processes payment transactions
-   - Handles payment validation and processing
-   - Endpoint: `/payments`
+2. **Inventory Service** (`inventory-service`)
+   - Reserves or fails inventory on `order.created`
+   - Publishes `inventory.reserved`, `inventory.failed`, and compensating `inventory.released`
+   - No public HTTP API for the Saga demo
 
-3. **Inventory Service** (`inventory-service`)
-   - Manages event inventory and availability
-   - Tracks stock levels and reservations
-   - Endpoint: `/inventory`
+3. **Payment Service** (`payment-service`)
+   - Listens to `inventory.reserved`
+   - Publishes `payment.succeeded` or `payment.failed` (simulated failures)
+   - No public HTTP API for the Saga demo
 
 4. **Notification Service** (`notification-service`)
-   - Sends notifications to users
-   - Handles email, SMS, and push notifications
-   - Endpoint: `/notifications`
+   - Listens to final Saga topics: `payment.succeeded`, `inventory.failed`, `payment.failed`
+   - Logs concise “Order confirmed/failed” messages
+   - No public HTTP API for the Saga demo
 
 ## 🛠️ Technology Stack
 
@@ -99,11 +99,11 @@ mvn spring-boot:run
 
 ### 5. Verify Services
 
-Each service has a health check endpoint:
+Health check endpoints:
 
 - Order Service: `http://localhost:8080/orders/hello`
-- Payment Service: `http://localhost:8081/payments/hello`
-- Inventory Service: `http://localhost:8082/inventory/hello`
+- Payment Service: `http://localhost:8082/payments/hello`
+- Inventory Service: `http://localhost:8081/inventory/hello`
 - Notification Service: `http://localhost:8083/notifications/hello`
 
 ## 📁 Project Structure
@@ -136,20 +136,32 @@ cd EventCart/services/<service-name>
 mvn test
 ```
 
-## 📝 API Endpoints
+## 📝 Demo Flow (Phase 2 Saga)
 
-### Order Service
-- `GET /orders/hello` - Health check
-- `POST /orders/` - Create a new order
+1. **Create an order**
 
-### Payment Service
-- `GET /payments/hello` - Health check
+```bash
+curl -X POST http://localhost:8080/orders \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"sku":"BOOK-123","quantity":1}],"totalAmount":49.99}'
+```
 
-### Inventory Service
-- `GET /inventory/hello` - Health check
+2. **Saga event chain**
 
-### Notification Service
-- `GET /notifications/hello` - Health check
+- `order-service` → `order.created`
+- `inventory-service` → `inventory.reserved` or `inventory.failed`
+- `payment-service` → `payment.succeeded` or `payment.failed`
+- `inventory-service` (compensation) → `inventory.released` on `payment.failed`
+- `order-service` updates in-memory status (PENDING / RESERVED / CONFIRMED / FAILED)
+- `notification-service` logs final outcome
+
+3. **Check order status**
+
+```bash
+curl http://localhost:8080/orders/<orderId>
+```
+
+The response reflects the latest Saga status from the in-memory `OrderStore`.
 
 ## 🔧 Configuration
 
