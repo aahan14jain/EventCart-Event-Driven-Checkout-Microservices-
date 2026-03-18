@@ -1,8 +1,11 @@
 package com.eventcart.orderservice;
 
+import org.springframework.stereotype.Component;
+
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Component
 public class OrderStore {
     private final ConcurrentHashMap<String, OrderRecord> storage = new ConcurrentHashMap<>();
 
