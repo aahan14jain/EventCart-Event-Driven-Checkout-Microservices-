@@ -138,6 +138,42 @@ cd EventCart/services/<service-name>
 mvn test
 ```
 
+## 📊 Phase 4 Observability (Prometheus + Grafana)
+
+Phase 4 adds service-level metrics and dashboards for local monitoring:
+
+- **Spring Boot Actuator** endpoints on each service
+- **Prometheus** scrapes `/actuator/prometheus`
+- **Grafana** visualizes service and JVM/Kafka metrics
+
+### Start observability stack
+
+```bash
+docker compose up -d prometheus grafana
+```
+
+### Key local endpoints
+
+- Prometheus UI: `http://localhost:9090`
+- Grafana UI: `http://localhost:3000`
+- Order Service metrics: `http://localhost:8080/actuator/prometheus`
+- Order Service health: `http://localhost:8080/actuator/health`
+
+### Grafana datasource
+
+This repo includes datasource provisioning at:
+
+- `grafana/provisioning/datasources/datasources.yml`
+
+Prometheus scrape config is in:
+
+- `prometheus/prometheus.yml`
+
+### Notes
+
+- Keep the service ports in Prometheus scrape targets aligned with your local run ports.
+- If `order-service` is run on a custom port (for example `8095`), update Prometheus target(s) accordingly.
+
 ## 🗄️ Phase 5 Persistence Status (Order Service)
 
 Current `order-service` persistence is profile-based:
