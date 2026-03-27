@@ -9,7 +9,7 @@ This project implements a microservices-based event-driven architecture for mana
 ### Microservices (Saga-based)
 
 1. **Order Service** (`order-service`)
-   - Creates orders and stores in-memory state
+   - Creates orders and persists state in PostgreSQL (with in-memory mode available outside `postgres` profile)
    - Publishes `order.created` and tracks Saga status (PENDING → RESERVED → CONFIRMED / FAILED)
    - Endpoint: `/orders`
 
@@ -137,6 +137,36 @@ Run tests for each service:
 cd EventCart/services/<service-name>
 mvn test
 ```
+
+## 🗄️ Phase 5 Persistence Status (Order Service)
+
+Current `order-service` persistence is profile-based:
+
+- **`postgres` profile**: PostgreSQL-backed `OrderStore` (source of truth)
+- **non-`postgres` profile**: in-memory `OrderStore` for local fallback/demo
+
+Persisted order data currently includes:
+
+- `orderId`
+- `status`
+- `correlationId`
+- `createdAt` / `updatedAt`
+- `totalAmount`
+- `items` (`sku`, `quantity`)
+- `forcePaymentFailure` (demo flag)
+
+Run `order-service` with PostgreSQL:
+
+```bash
+cd EventCart/services/order-service
+SERVER_PORT=8095 ./mvnw spring-boot:run -Dspring-boot.run.profiles=postgres
+```
+
+Optional datasource overrides:
+
+- `ORDER_DB_URL` (or `SPRING_DATASOURCE_URL`)
+- `ORDER_DB_USERNAME` (or `SPRING_DATASOURCE_USERNAME`)
+- `ORDER_DB_PASSWORD` (or `SPRING_DATASOURCE_PASSWORD`)
 
 ## 📝 Demo Flow (Phase 2 Saga)
 
