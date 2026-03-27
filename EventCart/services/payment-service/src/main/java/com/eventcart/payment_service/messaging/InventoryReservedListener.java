@@ -2,6 +2,7 @@ package com.eventcart.payment_service.messaging;
 
 import com.eventcart.payment_service.events.PaymentFailedEvent;
 import com.eventcart.payment_service.events.PaymentSucceededEvent;
+import com.eventcart.payment_service.idempotency.IdempotencyService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -15,17 +16,23 @@ public class InventoryReservedListener {
 
     private static final Logger log = LoggerFactory.getLogger(InventoryReservedListener.class);
 
+    private static final String EVENT_INVENTORY_RESERVED = "inventory.reserved";
+
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final IdempotencyService idempotencyService;
 
-    public InventoryReservedListener(ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate) {
+    public InventoryReservedListener(ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate,
+            IdempotencyService idempotencyService) {
         this.objectMapper = objectMapper;
         this.kafkaTemplate = kafkaTemplate;
+        this.idempotencyService = idempotencyService;
     }
 
     @KafkaListener(topics = "inventory.reserved", groupId = "payment-group")
     public void onInventoryReserved(String message) {
         try {
+            log.info("inventory.reserved incoming json={}", message);
             JsonNode root = objectMapper.readTree(message);
             String orderId = root.has("orderId") ? root.get("orderId").asText() : null;
             if (orderId == null) {
@@ -33,7 +40,17 @@ public class InventoryReservedListener {
                 return;
             }
 
-            boolean shouldFail = orderId.toLowerCase().contains("fail-pay") || orderId.startsWith("PAYFAIL");
+            if (!claimFirstProcessingOrLogDuplicate(orderId)) {
+                return;
+            }
+
+            boolean forceFailure = root.has("forcePaymentFailure") && root.get("forcePaymentFailure").asBoolean();
+            boolean failPayMatch = orderId.toLowerCase().contains("fail-pay");
+            boolean payfailPrefix = orderId.startsWith("PAYFAIL");
+            boolean shouldFail = forceFailure || failPayMatch || payfailPrefix;
+            log.info(
+                    "payment shouldFail decision: orderId={} forcePaymentFailure={} failPayMatch={} payfailPrefix={} shouldFail={}",
+                    orderId, forceFailure, failPayMatch, payfailPrefix, shouldFail);
             if (shouldFail) {
                 PaymentFailedEvent event = new PaymentFailedEvent(orderId, "PAYMENT_DECLINED");
                 kafkaTemplate.send("payment.failed", orderId, event);
@@ -46,5 +63,17 @@ public class InventoryReservedListener {
         } catch (Exception e) {
             log.error("Failed to process inventory.reserved message: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Idempotency + demo logs. @return {@code true} if first processing; {@code false} if duplicate (already logged).
+     */
+    private boolean claimFirstProcessingOrLogDuplicate(String orderId) {
+        if (!idempotencyService.markIfNotProcessed(EVENT_INVENTORY_RESERVED, orderId)) {
+            log.info("Duplicate event ignored: inventory.reserved for order {}", orderId);
+            return false;
+        }
+        log.info("Processing inventory.reserved for order {}: charging payment", orderId);
+        return true;
     }
 }

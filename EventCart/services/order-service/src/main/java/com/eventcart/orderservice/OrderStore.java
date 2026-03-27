@@ -1,20 +1,13 @@
 package com.eventcart.orderservice;
 
-import org.springframework.stereotype.Component;
-
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
-@Component
-public class OrderStore {
-    private final ConcurrentHashMap<String, OrderRecord> storage = new ConcurrentHashMap<>();
+/** Authoritative order state abstraction used by controller/listeners. */
+public interface OrderStore {
 
-    public OrderRecord save(OrderRecord record) {
-        storage.put(record.getOrderId(), record);
-        return record;
-    }
+    OrderRecord save(OrderRecord record);
 
-    public Optional<OrderRecord> findById(String orderId) {
-        return Optional.ofNullable(storage.get(orderId));
-    }
+    Optional<OrderRecord> updateStatus(String orderId, OrderStatus newStatus);
+
+    Optional<OrderRecord> findById(String orderId);
 }
